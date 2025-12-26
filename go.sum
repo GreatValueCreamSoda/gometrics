@@ -1,0 +1,8 @@
+github.com/GreatValueCreamSoda/goffms2 v0.0.0-20251213173234-86ff56d3ba5e h1:2mDNK6whNHC+kGVIqXkakzqiG22hsZjjqV2YPoozyIc=
+github.com/GreatValueCreamSoda/goffms2 v0.0.0-20251213173234-86ff56d3ba5e/go.mod h1:hNIe6ICQkhQXmCAomU3mpWBAE4n8Wz7MkzCtv/lojfM=
+github.com/GreatValueCreamSoda/gopixfmts v0.0.0-20251207215252-ab2c9275346f h1:OYXAsCrJ5Qa0Do68BcbcFYvcVKvcj8vb+RfD9MhDWT4=
+github.com/GreatValueCreamSoda/gopixfmts v0.0.0-20251207215252-ab2c9275346f/go.mod h1:TfpOJzrasTsHyVCD1ncWTPNyyIBbzeBjgtK/8f+Kiao=
+github.com/GreatValueCreamSoda/govship v0.0.0-20251221150033-662b4cab7975 h1:z72N8s2HEAdqQWhLYkiR/sy7Lh/tmquY2zPu7qek2PQ=
+github.com/GreatValueCreamSoda/govship v0.0.0-20251221150033-662b4cab7975/go.mod h1:3jI/q2i1XMFUAtfJy6jVdO21S3hWszid+6PCKMkAvbg=
+golang.org/x/sync v0.19.0 h1:vV+1eWNmZ5geRlYjzm2adRgW2/mcpevXNg50YZtPCE4=
+golang.org/x/sync v0.19.0/go.mod h1:9KTHXmSnoGruLpwFjVSX0lNNA75CykiMECbovNTZqGI=
