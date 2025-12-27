@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/GreatValueCreamSoda/gometrics/blockingpool"
 	vship "github.com/GreatValueCreamSoda/govship"
 	"golang.org/x/sync/errgroup"
 )
+
+type ProgressCallback func(done int, total int)
 
 type Source interface {
 	GetFrame(*Frame) error
@@ -74,13 +77,13 @@ type framePair struct {
 //
 // The zero value is not valid; use NewComparator to construct an instance.
 type Comparator struct {
-	videoA     Source                            // Source for Video A.
-	videoB     Source                            // Source for Video B.
-	metrics    []Metric                          // Metrics to compute on each frame pair.
-	threads    int                               // Number of concurrent metric workers.
-	framePoolA blockingpool.BlockingPool[*Frame] // Reusable frame buffers for video A.
-	framePoolB blockingpool.BlockingPool[*Frame] // Reusable frame buffers for video B.
-	numFrames  int                               // Number of frame pairs to process.
+	videoA       Source                            // Source for Video A.
+	videoB       Source                            // Source for Video B.
+	metrics      []Metric                          // Metrics to compute on each frame pair.
+	frameThreads int                               // Number of concurrent metric workers.
+	framePoolA   blockingpool.BlockingPool[*Frame] // Reusable frame buffers for video A.
+	framePoolB   blockingpool.BlockingPool[*Frame] // Reusable frame buffers for video B.
+	numFrames    int                               // Number of frame pairs to process.
 
 	// Internal channels for the pipeline stages.
 	videoAFrameChan chan *Frame
@@ -94,6 +97,8 @@ type Comparator struct {
 
 	ctx       context.Context
 	ctxCancel context.CancelCauseFunc
+
+	progress ProgressCallback
 }
 
 // NewComparator creates and initializes a Comparator.
@@ -108,12 +113,12 @@ type Comparator struct {
 //
 // Returns an error if any input is invalid or if the sources have fewer frames
 // than requested.
-func NewComparator(videoA, videoB Source, metrics []Metric, threads int,
+func NewComparator(videoA, videoB Source, metrics []Metric, frameThreads int,
 	numFrames int) (Comparator, error) {
 	var Comparator Comparator
 	Comparator.videoA, Comparator.videoB = videoA, videoB
 	Comparator.metrics = metrics
-	Comparator.threads = threads
+	Comparator.frameThreads = frameThreads
 	Comparator.numFrames = numFrames
 
 	if Comparator.videoA == nil || Comparator.videoB == nil {
@@ -124,7 +129,7 @@ func NewComparator(videoA, videoB Source, metrics []Metric, threads int,
 		return Comparator, errors.New("at least one metric must be specifed")
 	}
 
-	if Comparator.threads < 1 {
+	if Comparator.frameThreads < 1 {
 		return Comparator, errors.New("at least 1 thread must be used for " +
 			"metric computation")
 	}
@@ -143,33 +148,37 @@ func NewComparator(videoA, videoB Source, metrics []Metric, threads int,
 	Comparator.videoAFrameChan = make(chan *Frame, 1)
 	totalFrameBuffers = totalFrameBuffers + 1
 
-	Comparator.fPairChan = make(chan framePair, threads/2)
+	Comparator.fPairChan = make(chan framePair, frameThreads/2)
 	// One frame buffers per queue item. One buffers per working metric thread.
-	totalFrameBuffers = totalFrameBuffers + (threads/2 + 1) + threads
+	totalFrameBuffers = totalFrameBuffers + (frameThreads/2 + 1) + frameThreads
 
 	Comparator.framePoolA = blockingpool.NewBlockingPool[*Frame](totalFrameBuffers)
 	Comparator.framePoolB = blockingpool.NewBlockingPool[*Frame](totalFrameBuffers)
 
 	for range totalFrameBuffers {
-		var frameA *Frame = new(Frame)
-		sA, lA := videoA.GetPlaneSizes()
-		frameA.data = [3][]byte{
-			make([]byte, sA[0]), make([]byte, sA[1]), make([]byte, sA[2])}
-		frameA.lineSize = [3]int64{int64(lA[0]), int64(lA[1]), int64(lA[2])}
-		Comparator.framePoolA.Put(frameA)
-
-		var frameB *Frame = new(Frame)
-		SB, lB := videoB.GetPlaneSizes()
-		frameB.data = [3][]byte{
-			make([]byte, SB[0]), make([]byte, SB[1]), make([]byte, SB[2])}
-		frameB.lineSize = [3]int64{int64(lB[0]), int64(lB[1]), int64(lB[2])}
-		Comparator.framePoolB.Put(frameB)
+		Comparator.allocateFrameBuffer()
 	}
 
-	Comparator.scoresChan = make(chan metricResult, threads)
+	Comparator.scoresChan = make(chan metricResult, frameThreads)
 	Comparator.finalScores = make(map[string][]float64)
 
 	return Comparator, nil
+}
+
+func (c *Comparator) allocateFrameBuffer() {
+	var frameA *Frame = new(Frame)
+	sA, lA := c.videoA.GetPlaneSizes()
+	frameA.data = [3][]byte{
+		make([]byte, sA[0]), make([]byte, sA[1]), make([]byte, sA[2])}
+	frameA.lineSize = [3]int64{int64(lA[0]), int64(lA[1]), int64(lA[2])}
+	c.framePoolA.Put(frameA)
+
+	var frameB *Frame = new(Frame)
+	SB, lB := c.videoB.GetPlaneSizes()
+	frameB.data = [3][]byte{
+		make([]byte, SB[0]), make([]byte, SB[1]), make([]byte, SB[2])}
+	frameB.lineSize = [3]int64{int64(lB[0]), int64(lB[1]), int64(lB[2])}
+	c.framePoolB.Put(frameB)
 }
 
 // Run starts the comparison pipeline.
@@ -204,6 +213,12 @@ func (c *Comparator) Run(parentCtx context.Context) (map[string][]float64,
 	group.Go(c.aggregateResults)
 
 	return c.finalScores, group.Wait()
+}
+
+// SetProgressCallback registers a progress callback on the Comparator. It must
+// be called before Run. Passing nil clears the callback.
+func (c *Comparator) SetProgressCallback(cb ProgressCallback) {
+	c.progress = cb
 }
 
 // ----------------------------------------------------------------------------
@@ -307,7 +322,7 @@ func (c *Comparator) spawnFramePairThreads() error {
 func (c *Comparator) spawnMetricsThreads() error {
 	group, ctx := errgroup.WithContext(c.ctx)
 
-	for range c.threads {
+	for range c.frameThreads {
 		group.Go(func() error { return c.metricThread(ctx) })
 	}
 
@@ -352,24 +367,33 @@ func (c *Comparator) computeFrameMetrics(pair framePair, metrics []Metric) (
 
 	result := make(map[string]float64, len(metrics)*3)
 
+	// We let each metric within a fram run in parallel instead of one at a
+	// time. This on my machine with ssimu2 + butter increased fps from 85-87
+	// to a consistent 90 fps with 1 worker. Should give small gains when
+	// generating distortion maps.
+	var mu sync.Mutex
+	group, _ := errgroup.WithContext(c.ctx)
+
 	for _, metric := range metrics {
-		if err := c.computeFrameMetric(pair, result, metric); err != nil {
-			return nil, err
-		}
+		group.Go(func() error {
+			return c.computeFrameMetric(pair, result, metric, &mu)
+		})
 	}
 
-	return result, nil
+	return result, group.Wait()
 }
 
 // computeFrameMetric invokes a single Metric's Compute method and merges its
 // results into the result map, returning an error on failure or duplicate
 // keys.
 func (Comparator) computeFrameMetric(pair framePair, res map[string]float64,
-	metric Metric) error {
+	metric Metric, mu *sync.Mutex) error {
 	scores, err := metric.Compute(pair.a, pair.b)
 	if err != nil {
 		return fmt.Errorf("%s computation failed: %w", metric.Name(), err)
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	for k, v := range scores {
 		if _, exists := res[k]; exists {
 			return fmt.Errorf("duplicate metric %q from %s", k, metric.Name())
@@ -387,6 +411,7 @@ func (Comparator) computeFrameMetric(pair framePair, res map[string]float64,
 // aggergateResults consumes all metricResult values from scoresChan and
 // accumulates them into the Comparator's finalScores map.
 func (c *Comparator) aggregateResults() error {
+	completed := 0
 	for res := range withContext(c.ctx, c.scoresChan) {
 		for name, val := range res.scores {
 			if res.index < 0 || res.index >= c.numFrames {
@@ -396,6 +421,10 @@ func (c *Comparator) aggregateResults() error {
 				c.finalScores[name] = make([]float64, c.numFrames)
 			}
 			c.finalScores[name][res.index] = val
+		}
+		completed++
+		if c.progress != nil {
+			c.progress(completed, c.numFrames)
 		}
 	}
 	return nil

@@ -2,8 +2,10 @@ package metrics
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strconv"
 	"sync"
@@ -11,6 +13,8 @@ import (
 
 	"github.com/GreatValueCreamSoda/gometrics/comparator"
 )
+
+var ErrDistortionMapUnsupported = errors.New("distortion maps are unsupported for this metric.")
 
 type MetricWithDistortionMap interface {
 	SetDistMapCallback(DistortionMapCallback) error
@@ -96,6 +100,8 @@ func startFFmpeg(width int, height int, frameRate float32, settings []string,
 	}, append(settings, outputPath)...)
 
 	cmd := exec.Command("ffmpeg", args...)
+
+	cmd.Stderr = os.Stderr
 
 	if pipe, err := cmd.StdinPipe(); err != nil {
 		return nil, nil, fmt.Errorf("failed to get ffmpeg stdin pipe: %w", err)

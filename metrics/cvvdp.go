@@ -31,12 +31,13 @@ type CVVDPHandler struct {
 	dstWidth, dstHeight int
 	// distortionBuffer stores the per-pixel distortion map when requested. It
 	// is reused across calls to avoid repeated allocations.
-	distortionBuffer []float32
-	useTemporal      bool
-	resizeToDisplay  bool
-	// retrieveDistortionMap controls whether Butteraugli should emit a full
-	// distortion map in addition to scalar scores.
-	retrieveDistortionMap bool
+	distortionBuffer             []float32
+	useTemporal, resizeToDisplay bool
+	// callback is a callback function called at the end of .Compute() if it
+	// and retrieveDistortionMap are set.
+	callback DistortionMapCallback
+
+	numWorkers int
 }
 
 // Name returns the metric identifier used as the score key.
@@ -62,21 +63,22 @@ func (h *CVVDPHandler) Name() string { return CVVDPName }
 // If retrieveDistortionMap is true, a per-pixel distortion map will be
 // computed and stored internally. Only a single worker is allowed when
 // retrieveDistortionMap is enabled.
-func NewCVVDPHandler(numWorkers int, colorA, colorB *vship.Colorspace,
-	useTemporal, resizeToDisplay, retrieveDistMap bool,
-	displayModel vship.DisplayModel, fps float32) (comparator.Metric, error) {
+func NewCVVDPHandler(numWorkers int, a, colorB *vship.Colorspace,
+	useTemporal, resizeToDisplay bool, distM vship.DisplayModel, fps float32) (
+	MetricWithDistortionMap, error) {
 
 	var h CVVDPHandler
 
-	h.retrieveDistortionMap = retrieveDistMap
 	h.pool = blockingpool.NewBlockingPool[*vship.CVVDPHandler](numWorkers)
-	h.dstWidth, h.dstHeight = int(colorA.TargetWidth), int(colorA.TargetHeight)
-	h.useTemporal = useTemporal
+	h.useTemporal, h.resizeToDisplay = useTemporal, resizeToDisplay
 
-	if numWorkers > 1 && h.retrieveDistortionMap == true {
-		return nil, errors.New("cannot request more than 1 worker when " +
-			"returning a distortion map")
+	if !h.resizeToDisplay {
+		h.dstWidth, h.dstHeight = int(a.TargetWidth), int(a.TargetHeight)
+	} else {
+		h.dstWidth, h.dstHeight = distM.DisplayWidth, distM.DisplayHeight
 	}
+
+	h.numWorkers = numWorkers
 
 	tmp, e := os.CreateTemp("", "")
 	if e != nil {
@@ -84,9 +86,9 @@ func NewCVVDPHandler(numWorkers int, colorA, colorB *vship.Colorspace,
 	}
 	defer tmp.Close()
 
-	displayModel.Name = "Custom"
+	distM.Name = "Custom"
 
-	e = vship.DisplayModelsToCVVDPJSONFile([]vship.DisplayModel{displayModel},
+	e = vship.DisplayModelsToCVVDPJSONFile([]vship.DisplayModel{distM},
 		tmp.Name())
 	if e != nil {
 		return nil, e
@@ -95,7 +97,7 @@ func NewCVVDPHandler(numWorkers int, colorA, colorB *vship.Colorspace,
 	defer os.Remove(tmp.Name())
 
 	for range numWorkers {
-		err := h.createWorker(colorA, colorB, tmp.Name(), fps)
+		err := h.createWorker(a, colorB, tmp.Name(), fps)
 		if err != nil {
 			defer h.Close()
 			return nil, err
@@ -132,7 +134,7 @@ func (h *CVVDPHandler) getDistortionBufferAndSize() ([]byte, int64) {
 	var dstptr []byte = nil
 	var dstStride int64 = 0
 
-	if !h.retrieveDistortionMap {
+	if h.callback == nil {
 		return nil, 0
 	}
 
@@ -147,36 +149,6 @@ func (h *CVVDPHandler) getDistortionBufferAndSize() ([]byte, int64) {
 		totalSize*4)
 
 	return dstptr, dstStride
-}
-
-// DistortionMap returns the most recently computed Butteraugli distortion map
-// along with its dimensions.
-//
-// An error is returned if distortion maps were not enabled at construction
-// time or if no computation has been performed yet.
-//
-// This function is not thread safe and passes the internally used buffer.
-// Calling Compute() or any other method before finishing usage of the returned
-// slice will lead to undefined behavior.
-func (h *CVVDPHandler) DistortionMap() ([]float32, int, int, error) {
-	if !h.retrieveDistortionMap {
-		return nil, 0, 0, fmt.Errorf(
-			"%s distortion map was not enabled for this handler",
-			ButteraugliName,
-		)
-	}
-
-	if h.distortionBuffer == nil {
-		return nil, 0, 0, fmt.Errorf(
-			"%s distortion map requested before Compute was called",
-			ButteraugliName,
-		)
-	}
-
-	out := make([]float32, len(h.distortionBuffer))
-	copy(out, h.distortionBuffer)
-
-	return out, h.dstWidth, h.dstHeight, nil
 }
 
 // Compute calculates the CVVDP perceptual score between two frames.
@@ -223,7 +195,27 @@ func (h *CVVDPHandler) Compute(a, b *comparator.Frame) (map[string]float64,
 			CVVDPName, code.GetError())
 	}
 
+	if h.callback != nil {
+		err := h.callback(h.distortionBuffer)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return map[string]float64{CVVDPName: score}, nil
+}
+
+func (h *CVVDPHandler) SetDistMapCallback(callback DistortionMapCallback) error {
+	if h.numWorkers > 1 {
+		return errors.New("cannot request more than 1 worker when " +
+			"returning a distortion map")
+	}
+	h.callback = callback
+	return nil
+}
+
+func (h *CVVDPHandler) GetDistMapResolution() (int, int, error) {
+	return h.dstWidth, h.dstHeight, nil
 }
 
 // Close releases all underlying CVVDP workers.

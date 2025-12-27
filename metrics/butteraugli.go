@@ -51,8 +51,7 @@ func (h *ButterHandler) Name() string { return ButteraugliName }
 // computed and stored internally. Only a single worker is allowed when
 // retrieveDistortionMap is enabled.
 func NewButterHandler(numWorkers int, colorA, colorB *vship.Colorspace,
-	qNorm int, displayIntensity float32, retrieveDistortionMap bool) (
-	MetricWithDistortionMap, error) {
+	qNorm int, displayIntensity float32) (MetricWithDistortionMap, error) {
 	var handler ButterHandler
 	var err error
 

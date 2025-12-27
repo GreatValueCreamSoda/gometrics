@@ -1,15 +1,12 @@
 package metrics
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/GreatValueCreamSoda/gometrics/blockingpool"
 	"github.com/GreatValueCreamSoda/gometrics/comparator"
 	vship "github.com/GreatValueCreamSoda/govship"
 )
-
-var ErrDistortionMapUnsupported = errors.New("distortion maps are unsupported for this metric.")
 
 // SSIMulacra2Name is the canonical metric name used for score reporting.
 var SSIMulacra2Name string = "Ssimulacra2"
@@ -29,7 +26,7 @@ type Ssimu2Handler struct {
 }
 
 // Name returns the metric identifier used as the score key.
-func (h *Ssimu2Handler) Name() string { return "ssimu2" }
+func (h *Ssimu2Handler) Name() string { return SSIMulacra2Name }
 
 // NewSSIMU2Handler constructs a Ssimu2Handler with the requested number of
 // worker instances.
