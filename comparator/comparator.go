@@ -18,6 +18,7 @@ type Source interface {
 	GetColorspace() *vship.Colorspace
 	GetNumFrames() int
 	GetPlaneSizes() ([3]int, [3]int)
+	GetFrameRate() float32
 }
 
 // Metric is the interface that every metric must implement

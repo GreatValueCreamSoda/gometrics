@@ -16,6 +16,7 @@ type ffmsSource struct {
 	colorspace   vship.Colorspace
 	planeSizes   [3]int
 	planeStrides [3]int
+	frameRate    float32
 }
 
 func NewFFms2Reader(path string) (comparator.Source, error) {
@@ -71,7 +72,7 @@ func NewFFms2Reader(path string) (comparator.Source, error) {
 	colorspace, err := convertFfmsFrameToVshipColorspace(&ff)
 
 	return &ffmsSource{0, video, props.NumFrames, colorspace, planeSizes,
-		planeStrides}, nil
+		planeStrides, float32(props.FPSNumerator) / float32(props.FPSDenominator)}, nil
 }
 
 func (s *ffmsSource) GetFrame(frame *comparator.Frame) error {
@@ -91,6 +92,7 @@ func (s *ffmsSource) GetFrame(frame *comparator.Frame) error {
 
 func (s *ffmsSource) GetColorspace() *vship.Colorspace { return &s.colorspace }
 func (s *ffmsSource) GetNumFrames() int                { return s.numFrame }
+func (s *ffmsSource) GetFrameRate() float32            { return s.frameRate }
 
 func (c *ffmsSource) GetPlaneSizes() ([3]int, [3]int) {
 	return c.planeSizes, c.planeStrides

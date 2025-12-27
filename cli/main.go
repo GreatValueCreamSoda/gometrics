@@ -23,6 +23,10 @@ func main() {
 		panic(err)
 	}
 
+	if settings.frameRate < 0 {
+		settings.frameRate = reference.GetFrameRate()
+	}
+
 	var metricHandlers []comparator.Metric
 	var heatmapWriters []*metrics.HeatmapWriter
 
@@ -56,8 +60,9 @@ func main() {
 		_ = bar.Add(1)
 	})
 
-	scores, err := comp.Run(context.Background())
-	if err != nil {
+	var scores map[string][]float64
+
+	if scores, err = comp.Run(context.Background()); err != nil {
 		panic(err)
 	}
 
@@ -88,14 +93,13 @@ func newCVVDP(ref, dist *vship.Colorspace) (comparator.Metric,
 	*metrics.HeatmapWriter, error) {
 	handler, err := metrics.NewCVVDPHandler(settings.frameThreads, ref, dist,
 		settings.cvvdpUseTemporalScore, settings.cvvdpReizeToDisplay,
-		settings.displayModel, 15,
-	)
+		settings.displayModel, settings.frameRate)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cvvdp  creation failed: %w", err)
 	}
 
 	writer, err := createHeatmapWriterIfRequested(handler,
-		settings.cvvdpDistMapPath)
+		settings.cvvdpDistMapPath, settings.cvvdpClipping)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -124,7 +128,7 @@ func newButteraugli(ref, dist *vship.Colorspace) (comparator.Metric,
 	}
 
 	writer, err := createHeatmapWriterIfRequested(handler,
-		settings.butteraugliDistMapPath)
+		settings.butteraugliDistMapPath, settings.butteraugliClipping)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -133,13 +137,13 @@ func newButteraugli(ref, dist *vship.Colorspace) (comparator.Metric,
 }
 
 func createHeatmapWriterIfRequested(metric metrics.MetricWithDistortionMap,
-	outputPath string) (*metrics.HeatmapWriter, error) {
+	outputPath string, clipping float32) (*metrics.HeatmapWriter, error) {
 	if outputPath == "" {
 		return nil, nil
 	}
 
-	writer, err := metrics.WriteDistMapToVideo(metric, 25, nil, outputPath,
-		15)
+	writer, err := metrics.WriteDistMapToVideo(metric, settings.frameRate,
+		nil, outputPath, clipping)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to create heatmap writer for %s: %w", outputPath, err)
