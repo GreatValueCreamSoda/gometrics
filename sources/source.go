@@ -54,13 +54,15 @@ func NewFFms2Reader(path string) (comparator.Source, error) {
 		return nil, err
 	}
 
-	video.SetOutputFormatV2([]int{ff.EncodedPixelFormat}, ff.EncodedWidth,
-		ff.EncodedHeight, ffms.ResizerBicubic)
+	// Causes ffms2 to randomly segfault. Need to figure out why.
 
-	ff, _, err = video.GetFrame(0)
-	if err != nil {
-		return nil, err
-	}
+	// video.SetOutputFormatV2([]int{ff.EncodedPixelFormat}, ff.EncodedWidth,
+	//	ff.EncodedHeight, ffms.ResizerBicubic)
+
+	// ff, _, err = video.GetFrame(0)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	var planeSizes, planeStrides [3]int
 
@@ -128,9 +130,9 @@ func convertFfmsFrameToVshipColorspace(frame *ffms.Frame) (vship.Colorspace,
 
 	var colorspace vship.Colorspace
 
-	colorspace.Width = int64(frame.ScaledWidth)
+	colorspace.Width = int64(frame.EncodedWidth)
 	colorspace.TargetWidth = colorspace.Width
-	colorspace.Height = int64(frame.ScaledHeight)
+	colorspace.Height = int64(frame.EncodedHeight)
 	colorspace.TargetHeight = colorspace.Height
 
 	videoPixelFormat, err := gopixfmts.PixFmtDescGet(gopixfmts.PixelFormat(

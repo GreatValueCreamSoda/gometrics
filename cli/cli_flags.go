@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/GreatValueCreamSoda/gometrics/metrics"
@@ -39,7 +40,7 @@ func init() {
 	// General Flags
 	pflag.StringVarP(&settings.referenceVideo, "reference", "r", "", "The reference video path the distorted video will be compared against")
 	pflag.StringVarP(&settings.distortionVideo, "distortion", "d", "", "The distorted video path that will be compared to the reference")
-	metrics := pflag.String("metrics", metrics.SSIMulacra2Name, fmt.Sprintf("Comma seperated list of metrics that will be used [%s, %s, %s]", metrics.SSIMulacra2Name, metrics.ButteraugliName, metrics.CVVDPName))
+	cliMetrics := pflag.String("metrics", metrics.SSIMulacra2Name, fmt.Sprintf("Comma seperated list of metrics that will be used [%s, %s, %s]", metrics.SSIMulacra2Name, metrics.ButteraugliName, metrics.CVVDPName))
 	pflag.IntVar(&settings.frameThreads, "frame-threads", 3, "Number of frames to process in parallel. Set to 2 or 1 with 2 or more metrics")
 	pflag.Float32VarP(&settings.frameRate, "fps", "f", -1, "Overide the fps that will be used for temporal scaling. Default is the reference fps")
 	printHelp := pflag.BoolP("help", "h", false, "Show this help message")
@@ -96,13 +97,20 @@ func init() {
 
 	pflag.Parse()
 
+	settings.cvvdpUseTemporalScore = !settings.cvvdpUseTemporalScore
+	settings.cvvdpReizeToDisplay = !settings.cvvdpReizeToDisplay
+
 	if *printHelp {
 		cliUsage()
 		os.Exit(0)
 	}
 
-	settings.cvvdpUseTemporalScore = !settings.cvvdpUseTemporalScore
-	settings.cvvdpReizeToDisplay = !settings.cvvdpReizeToDisplay
+	settings.metrics = strings.Split(*cliMetrics, ",")
 
-	settings.metrics = strings.Split(*metrics, ",")
+	if settings.frameThreads > 1 && settings.cvvdpUseTemporalScore {
+		var cvvdp bool = slices.Contains(settings.metrics, metrics.CVVDPName)
+		if cvvdp {
+			panic("cannot use more than 1 frame thread while using cvvdp with temporal weighting.")
+		}
+	}
 }

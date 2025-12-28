@@ -375,6 +375,12 @@ func (c *Comparator) computeFrameMetrics(pair framePair, metrics []Metric) (
 	var mu sync.Mutex
 	group, _ := errgroup.WithContext(c.ctx)
 
+	// Skip the overhead of spawning a new goroutine and just run it within
+	// this one.
+	//if len(metrics) == 1 {
+	//	return result, c.computeFrameMetric(pair, result, metrics[0], &mu)
+	//}
+
 	for _, metric := range metrics {
 		group.Go(func() error {
 			return c.computeFrameMetric(pair, result, metric, &mu)
