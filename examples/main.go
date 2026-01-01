@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/GreatValueCreamSoda/gometrics/comparator"
-	"github.com/GreatValueCreamSoda/gometrics/metrics"
-	"github.com/GreatValueCreamSoda/gometrics/sources"
-	vship "github.com/GreatValueCreamSoda/govship"
+	vship "github.com/GreatValueCreamSoda/gometrics/c/libvship"
+	"github.com/GreatValueCreamSoda/gometrics/video"
+	"github.com/GreatValueCreamSoda/gometrics/video/comparator"
+	"github.com/GreatValueCreamSoda/gometrics/video/metrics"
+	"github.com/GreatValueCreamSoda/gometrics/video/sources"
 	"github.com/schollz/progressbar/v3"
 )
 
@@ -23,16 +24,43 @@ func main() {
 		panic(err)
 	}
 
+	var referenceColorSpace, distortionColorSpace vship.Colorspace
+	referenceColorSpace.SetDefaults(0, 0, 0)
+	distortionColorSpace.SetDefaults(0, 0, 0)
+
+	if settings.compareHeight > 0 && settings.compareWidth > 0 {
+		referenceColorSpace.TargetHeight = settings.compareHeight
+		referenceColorSpace.TargetWidth = settings.compareWidth
+		distortionColorSpace.TargetHeight = settings.compareHeight
+		distortionColorSpace.TargetWidth = settings.compareWidth
+	} else {
+		referenceColorSpace.TargetHeight = settings.compareHeight
+		referenceColorSpace.TargetWidth = settings.compareWidth
+		distortionColorSpace.TargetHeight = settings.compareHeight
+		distortionColorSpace.TargetWidth = settings.compareWidth
+
+	}
+
+	err = reference.GetColorProps().ToVsHipColorspace(&referenceColorSpace)
+	if err != nil {
+		panic(err)
+	}
+
+	err = distortion.GetColorProps().ToVsHipColorspace(&distortionColorSpace)
+	if err != nil {
+		panic(err)
+	}
+
 	if settings.frameRate < 0 {
 		settings.frameRate = reference.GetFrameRate()
 	}
 
-	var metricHandlers []comparator.Metric
+	var metricHandlers []video.Metric
 	var heatmapWriters []*metrics.HeatmapWriter
 
 	for _, metric := range settings.metrics {
 		metricHandler, heatmapWriter, err := createMetricAndWriter(
-			metric, reference.GetColorspace(), distortion.GetColorspace())
+			metric, &referenceColorSpace, &distortionColorSpace)
 		if err != nil {
 			panic(err)
 		}
@@ -76,7 +104,7 @@ func main() {
 }
 
 func createMetricAndWriter(metricName string, ref, dist *vship.Colorspace) (
-	comparator.Metric, *metrics.HeatmapWriter, error) {
+	video.Metric, *metrics.HeatmapWriter, error) {
 	switch metricName {
 	case metrics.ButteraugliName:
 		return newButteraugli(ref, dist)
@@ -89,7 +117,7 @@ func createMetricAndWriter(metricName string, ref, dist *vship.Colorspace) (
 	}
 }
 
-func newCVVDP(ref, dist *vship.Colorspace) (comparator.Metric,
+func newCVVDP(ref, dist *vship.Colorspace) (video.Metric,
 	*metrics.HeatmapWriter, error) {
 	handler, err := metrics.NewCVVDPHandler(settings.frameThreads, ref, dist,
 		settings.cvvdpUseTemporalScore, settings.cvvdpReizeToDisplay,
@@ -104,20 +132,20 @@ func newCVVDP(ref, dist *vship.Colorspace) (comparator.Metric,
 		return nil, nil, err
 	}
 
-	return comparator.Metric(handler), writer, nil
+	return video.Metric(handler), writer, nil
 }
 
-func newSSIMULACRA2(ref, dist *vship.Colorspace) (comparator.Metric,
+func newSSIMULACRA2(ref, dist *vship.Colorspace) (video.Metric,
 	*metrics.HeatmapWriter, error) {
 	handler, err := metrics.NewSSIMU2Handler(settings.frameThreads, ref, dist)
 	if err != nil {
 		return nil, nil, fmt.Errorf("ssimulacra2 creation failed: %w", err)
 	}
 
-	return comparator.Metric(handler), nil, nil
+	return video.Metric(handler), nil, nil
 }
 
-func newButteraugli(ref, dist *vship.Colorspace) (comparator.Metric,
+func newButteraugli(ref, dist *vship.Colorspace) (video.Metric,
 	*metrics.HeatmapWriter, error) {
 	handler, err := metrics.NewButterHandler(settings.frameThreads, ref, dist,
 		settings.butteraugliQnormValue,
@@ -133,7 +161,7 @@ func newButteraugli(ref, dist *vship.Colorspace) (comparator.Metric,
 		return nil, nil, err
 	}
 
-	return comparator.Metric(handler), writer, nil
+	return video.Metric(handler), writer, nil
 }
 
 func createHeatmapWriterIfRequested(metric metrics.MetricWithDistortionMap,

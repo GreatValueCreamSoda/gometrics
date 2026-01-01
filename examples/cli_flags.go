@@ -6,8 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/GreatValueCreamSoda/gometrics/metrics"
-	vship "github.com/GreatValueCreamSoda/govship"
+	vship "github.com/GreatValueCreamSoda/gometrics/c/libvship"
+	"github.com/GreatValueCreamSoda/gometrics/video/metrics"
 	"github.com/spf13/pflag"
 )
 
@@ -16,6 +16,7 @@ type cliSettings struct {
 	metrics                         []string
 	frameThreads                    int
 	frameRate                       float32
+	compareWidth, compareHeight     int
 
 	butteraugliDistMapPath string
 	butteraugliClipping    float32
@@ -43,6 +44,8 @@ func init() {
 	cliMetrics := pflag.String("metrics", metrics.SSIMulacra2Name, fmt.Sprintf("Comma seperated list of metrics that will be used [%s, %s, %s]", metrics.SSIMulacra2Name, metrics.ButteraugliName, metrics.CVVDPName))
 	pflag.IntVar(&settings.frameThreads, "frame-threads", 3, "Number of frames to process in parallel. Set to 2 or 1 with 2 or more metrics")
 	pflag.Float32VarP(&settings.frameRate, "fps", "f", -1, "Overide the fps that will be used for temporal scaling. Default is the reference fps")
+	pflag.IntVar(&settings.compareWidth, "width", -1, "Overide the resolution to compare at width. -1 defaults to the largest source")
+	pflag.IntVar(&settings.compareHeight, "height", -1, "Overide the resolution to compare at height. -1 defaults to the largest source")
 	printHelp := pflag.BoolP("help", "h", false, "Show this help message")
 
 	// Output Settings
@@ -66,10 +69,10 @@ func init() {
 
 	// CVVDP settings
 	var cvvdpSectionName string = "CVVDP Options"
-	pflag.BoolVar(&settings.cvvdpUseTemporalScore, "no-cvvdp-temporal", false, "Use temporal motion for calculating frame scores")
+	pflag.BoolVar(&settings.cvvdpUseTemporalScore, "no-cvvdp-temporal", false, "Disable temporal motion for calculating frame scores")
 	addFlagToHelpGroup("no-cvvdp-temporal", cvvdpSectionName)
 
-	pflag.BoolVar(&settings.cvvdpReizeToDisplay, "no-resize-to-display", false, "Use resizing videos to display models resolution")
+	pflag.BoolVar(&settings.cvvdpReizeToDisplay, "no-resize-to-display", false, "Disable resizing videos to display models resolution")
 	addFlagToHelpGroup("no-resize-to-display", cvvdpSectionName)
 
 	// Display Model

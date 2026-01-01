@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/GreatValueCreamSoda/gometrics/blockingpool"
-	"github.com/GreatValueCreamSoda/gometrics/comparator"
-	vship "github.com/GreatValueCreamSoda/govship"
+	vship "github.com/GreatValueCreamSoda/gometrics/c/libvship"
+	"github.com/GreatValueCreamSoda/gometrics/video"
 )
 
 // SSIMulacra2Name is the canonical metric name used for score reporting.
@@ -33,7 +33,7 @@ func (h *Ssimu2Handler) Name() string { return SSIMulacra2Name }
 //
 // colorA and colorB define the colorspaces of the reference and test images.
 func NewSSIMU2Handler(numWorkers int, colorA, colorB *vship.Colorspace) (
-	comparator.Metric, error) {
+	video.Metric, error) {
 	var h Ssimu2Handler
 	h.pool = blockingpool.NewBlockingPool[*vship.SSIMU2Handler](numWorkers)
 
@@ -91,15 +91,12 @@ func (h *Ssimu2Handler) Close() {
 // then returns the worker to the pool.
 //
 // The returned map contains a single entry keyed by Name().
-func (h *Ssimu2Handler) Compute(a, b *comparator.Frame) (map[string]float64,
+func (h *Ssimu2Handler) Compute(a, b *video.Frame) (map[string]float64,
 	error) {
 	handler := h.pool.Get()
 	defer h.pool.Put(handler)
 
-	aData, aLinesize := a.Read()
-	bData, bLinesize := b.Read()
-
-	score, code := handler.ComputeScore(aData, bData, aLinesize, bLinesize)
+	score, code := handler.ComputeScore(a.Data, b.Data, a.LineSize, b.LineSize)
 
 	if !code.IsNone() {
 		return nil, fmt.Errorf("%s computation failed: %v", SSIMulacra2Name,

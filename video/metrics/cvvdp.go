@@ -7,8 +7,8 @@ import (
 	"unsafe"
 
 	"github.com/GreatValueCreamSoda/gometrics/blockingpool"
-	"github.com/GreatValueCreamSoda/gometrics/comparator"
-	vship "github.com/GreatValueCreamSoda/govship"
+	vship "github.com/GreatValueCreamSoda/gometrics/c/libvship"
+	"github.com/GreatValueCreamSoda/gometrics/video"
 )
 
 var CVVDPName string = "CVVDP"
@@ -94,7 +94,7 @@ func NewCVVDPHandler(numWorkers int, a, colorB *vship.Colorspace,
 		return nil, e
 	}
 
-	defer os.Remove(tmp.Name())
+	// defer os.Remove(tmp.Name())
 
 	for range numWorkers {
 		err := h.createWorker(a, colorB, tmp.Name(), fps)
@@ -153,56 +153,51 @@ func (h *CVVDPHandler) getDistortionBufferAndSize() ([]byte, int64) {
 
 // Compute calculates the CVVDP perceptual score between two frames.
 //
-// The method borrows a worker from the pool, computes the scaler score and
+// The method borrows a worker from the pool to computes the scaler score and
 // then returns the worker to the pool.
-func (h *CVVDPHandler) Compute(a, b *comparator.Frame) (map[string]float64,
+func (h *CVVDPHandler) Compute(a, b *video.Frame) (map[string]float64,
 	error) {
 	handler := h.pool.Get()
 	defer h.pool.Put(handler)
 
 	dstptr, dstStride := h.getDistortionBufferAndSize()
 	var code vship.ExceptionCode
-	var score float64
+	var s float64
 
-	aData, aLinesize := a.Read()
-	bData, bLinesize := b.Read()
+	// We want to use per frame scores, so we must reset the aggergated score
+	// per frame.
+
+	code = handler.ResetScore()
+	if !code.IsNone() {
+		var err error = code.GetError()
+		return nil, fmt.Errorf("%s reset score poolinf failed: %w", CVVDPName,
+			err)
+	}
 
 	if h.useTemporal {
-		code = handler.ResetScore()
-		if !code.IsNone() {
-			return nil, fmt.Errorf(
-				"%s ResetScore failed: %w", CVVDPName, code.GetError())
-		}
-		score, code = handler.ComputeScore(dstptr, dstStride, aData, bData,
-			aLinesize, bLinesize)
-	} else {
-		code = handler.Reset()
-		if !code.IsNone() {
-			return nil, fmt.Errorf(
-				"%s Reset failed: %w", CVVDPName, code.GetError())
-		}
-		code = handler.ResetScore()
-		if !code.IsNone() {
-			return nil, fmt.Errorf(
-				"%s ResetScore failed: %w", CVVDPName, code.GetError())
-		}
-		score, code = handler.ComputeScore(dstptr, dstStride, aData, bData,
-			aLinesize, bLinesize)
+		goto SKIP_TEMPORAL_RESET
 	}
 
+	// Resets the temporal buffer if we dont want to get temporally weighted
+	// scores.
+
+	code = handler.Reset()
 	if !code.IsNone() {
-		return nil, fmt.Errorf("%s failed to compute score with error: %w",
-			CVVDPName, code.GetError())
+		var err error = code.GetError()
+		return nil, fmt.Errorf("%s temporal reset failed: %w", CVVDPName, err)
 	}
+
+SKIP_TEMPORAL_RESET:
+	s, code = handler.ComputeScore(dstptr, dstStride, a.Data, b.Data, a.LineSize,
+		b.LineSize)
 
 	if h.callback != nil {
-		err := h.callback(h.distortionBuffer)
-		if err != nil {
+		if err := h.callback(h.distortionBuffer); err != nil {
 			return nil, err
 		}
 	}
 
-	return map[string]float64{CVVDPName: score}, nil
+	return map[string]float64{CVVDPName: s}, nil
 }
 
 func (h *CVVDPHandler) SetDistMapCallback(callback DistortionMapCallback) error {

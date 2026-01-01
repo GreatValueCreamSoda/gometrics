@@ -32,9 +32,9 @@ func cliUsage() {
 		}
 		helpGroupLists[flagGroup] = append(helpGroupLists[flagGroup], f)
 
-		longestFlagName = max(longestFlagName, len(f.Name))
-		longestHelpMessage = max(longestHelpMessage, len(f.Usage))
-		longestDefaultVal = max(longestDefaultVal, len(getDefaultString(f)))
+		longestFlagName = max(longestFlagName, len(f.Name)+1)
+		longestHelpMessage = max(longestHelpMessage, len(f.Usage)+1)
+		longestDefaultVal = max(longestDefaultVal, len(getDefaultString(f))+1)
 	})
 
 	// Print each group

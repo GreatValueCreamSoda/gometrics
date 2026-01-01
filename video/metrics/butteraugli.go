@@ -6,8 +6,8 @@ import (
 	"unsafe"
 
 	"github.com/GreatValueCreamSoda/gometrics/blockingpool"
-	"github.com/GreatValueCreamSoda/gometrics/comparator"
-	vship "github.com/GreatValueCreamSoda/govship"
+	vship "github.com/GreatValueCreamSoda/gometrics/c/libvship"
+	"github.com/GreatValueCreamSoda/gometrics/video"
 )
 
 const ButteraugliName string = "Butteraugli"
@@ -128,18 +128,15 @@ func (h *ButterHandler) getDistortionBufferAndSize() ([]byte, int64) {
 //
 // The returned map keys are prefixed with ButteraugliName to avoid collisions
 // with other metrics.
-func (h *ButterHandler) Compute(a, b *comparator.Frame) (map[string]float64,
+func (h *ButterHandler) Compute(a, b *video.Frame) (map[string]float64,
 	error) {
 	handler := h.pool.Get()
 	defer h.pool.Put(handler)
 	dstptr, dstStride := h.getDistortionBufferAndSize()
 
-	aData, aLinesize := a.Read()
-	bData, bLinesize := b.Read()
-
 	var score vship.ButteraugliScore
-	exception := handler.ComputeScore(&score, dstptr, dstStride, aData, bData,
-		aLinesize, bLinesize)
+	exception := handler.ComputeScore(&score, dstptr, dstStride, a.Data, b.Data,
+		a.LineSize, b.LineSize)
 	if !exception.IsNone() {
 		return nil, fmt.Errorf("%s failed to compute score with error: %w",
 			ButteraugliName, exception.GetError())

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/GreatValueCreamSoda/gometrics/comparator"
+	"github.com/GreatValueCreamSoda/gometrics/video"
 )
 
 var ErrDistortionMapUnsupported = errors.New("distortion maps are unsupported for this metric.")
@@ -19,7 +19,7 @@ var ErrDistortionMapUnsupported = errors.New("distortion maps are unsupported fo
 type MetricWithDistortionMap interface {
 	SetDistMapCallback(DistortionMapCallback) error
 	GetDistMapResolution() (int, int, error)
-	comparator.Metric
+	video.Metric
 }
 
 type DistortionMapCallback func([]float32) error
