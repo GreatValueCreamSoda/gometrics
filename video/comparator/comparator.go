@@ -1,3 +1,7 @@
+// Package comparator implements a concurrent video comparison framework that
+// evaluates two video sources frame by frame using specified metrics. It
+// orchestrates parallel frame reading, pairing, metric computation, and result
+// aggregation to achieve efficient processing.
 package comparator
 
 import (
@@ -203,49 +207,57 @@ func (c *Comparator) calculateTotalNumberOfFrameBuffers() int {
 	return totalFrameBuffers
 }
 
+// allocateFrameBuffer allocates pinned memory buffers for all three planes of
+// both input videos (reference and distorted) and initializes the
+// corresponding Frame objects in their respective frame pools.
+//
+// This method is intended to be called exactly once during Comparator
+// initialization. Any failure during memory allocation or frame construction
+// causes immediate return with an appropriate error.
 func (c *Comparator) allocateFrameBuffer() error {
-	sA, lA := c.videoA.GetPlaneSizes()
-	aData1, code := vship.PinnedMalloc(sA[0])
-	if !code.IsNone() {
-		return code.GetError()
+	videoAPlaneSizes, videoALineSizes := c.videoA.GetPlaneSizes()
+	videoBPlaneSizes, videoBLineSizes := c.videoB.GetPlaneSizes()
+
+	var code vship.ExceptionCode
+	var sourceBuffers, distortedBuffers [3][]byte
+	var planeIndex int = 0
+
+	// AUTISM I HATE INTENDETD FOR LOOPS GET OVER IT.
+
+allocPlanes:
+	if planeIndex >= 3 {
+		goto createFrames
 	}
-	aData2, code := vship.PinnedMalloc(sA[1])
-	if !code.IsNone() {
-		return code.GetError()
-	}
-	aData3, code := vship.PinnedMalloc(sA[2])
+
+	// Allocate reference (source) plane
+	sourceBuffers[planeIndex], code = vship.PinnedMalloc(
+		videoAPlaneSizes[planeIndex])
 	if !code.IsNone() {
 		return code.GetError()
 	}
 
-	fA, err := video.NewFrame([3][]byte{aData1, aData2, aData3},
-		[3]int64{int64(lA[0]), int64(lA[1]), int64(lA[2])})
+	// Allocate distorted plane
+	distortedBuffers[planeIndex], code = vship.PinnedMalloc(
+		videoBPlaneSizes[planeIndex])
+	if !code.IsNone() {
+		return code.GetError()
+	}
+
+	planeIndex++
+	goto allocPlanes
+
+createFrames:
+	frameA, err := video.NewFrame(sourceBuffers, videoALineSizes)
 	if err != nil {
 		return err
 	}
+	c.framePoolA.Put(frameA)
 
-	c.framePoolA.Put(fA)
-
-	sB, lB := c.videoB.GetPlaneSizes()
-	bData1, code := vship.PinnedMalloc(sB[0])
-	if !code.IsNone() {
-		return code.GetError()
-	}
-	bData2, code := vship.PinnedMalloc(sB[1])
-	if !code.IsNone() {
-		return code.GetError()
-	}
-	bData3, code := vship.PinnedMalloc(sB[2])
-	if !code.IsNone() {
-		return code.GetError()
-	}
-
-	fB, err := video.NewFrame([3][]byte{bData1, bData2, bData3},
-		[3]int64{int64(lB[0]), int64(lB[1]), int64(lB[2])})
+	frameB, err := video.NewFrame(distortedBuffers, videoBLineSizes)
 	if err != nil {
 		return err
 	}
-	c.framePoolB.Put(fB)
+	c.framePoolB.Put(frameB)
 
 	return nil
 }

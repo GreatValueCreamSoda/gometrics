@@ -47,7 +47,7 @@ func Test_SSIMU2Handler_ComputeScore(t *testing.T) {
 		}
 	}
 
-	sourceLineSize := [3]int64{int64(width), int64(width / 2), int64(width / 2)}
+	sourceLineSize := [3]int{width, width / 2, width / 2}
 	distortedLineSize := sourceLineSize // same geometry in this test
 
 	score, exception := handler.ComputeScore(sourceData, distortedData, sourceLineSize, distortedLineSize)

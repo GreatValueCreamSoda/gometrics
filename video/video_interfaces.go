@@ -12,7 +12,7 @@ import (
 // (stride) for each plane.
 type Frame struct {
 	data     [3][]byte // Pixel data for each of the three planes.
-	lineSize [3]int64  // Line size (stride) for each plane, in bytes.
+	lineSize [3]int    // Line size (stride) for each plane, in bytes.
 }
 
 // NewFrame creates a new Frame with the given plane buffers and line sizes.
@@ -20,7 +20,7 @@ type Frame struct {
 // This is the only supported way to construct a Frame. The provided slices
 // become owned by the returned Frame. Callers must not retain references to
 // the input slices after this call unless frame lifetime is properly tracked
-func NewFrame(data [3][]byte, lineSize [3]int64) (Frame, error) {
+func NewFrame(data [3][]byte, lineSize [3]int) (Frame, error) {
 	for i := 0; i < 3; i++ {
 		if len(data[i]) != 0 {
 			continue
@@ -41,7 +41,7 @@ func (f *Frame) Data() [3][]byte {
 // LineSizes returns a copy of the array containing the three line sizes
 // (strides). The returned array is safe to read and cannot be used to modify
 // the Frame.
-func (f *Frame) LineSizes() [3]int64 {
+func (f *Frame) LineSizes() [3]int {
 	return f.lineSize
 }
 
@@ -55,7 +55,7 @@ func (f *Frame) PlaneData(plane int) []byte {
 
 // PlaneLineSize returns the line size (stride) in bytes for the requested
 // plane.
-func (f *Frame) PlaneLineSize(plane int) int64 {
+func (f *Frame) PlaneLineSize(plane int) int {
 	if plane < 0 || plane > 2 {
 		return 0
 	}

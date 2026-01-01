@@ -99,15 +99,15 @@ func (h *ButterHandler) createWorker(colorA, colorB *vship.Colorspace,
 // implementation without copying.
 //
 // If distortion maps are disabled, it returns nil and zero.
-func (h *ButterHandler) getDistortionBufferAndSize() ([]byte, int64) {
+func (h *ButterHandler) getDistortionBufferAndSize() ([]byte, int) {
 	var dstptr []byte = nil
-	var dstStride int64 = 0
+	var dstStride int = 0
 
 	if h.callback == nil {
 		return nil, 0
 	}
 
-	dstStride = int64(h.dstWidth) * int64(unsafe.Sizeof(float32(0)))
+	dstStride = h.dstWidth * int(unsafe.Sizeof(float32(0)))
 	totalSize := h.dstWidth * h.dstHeight
 
 	if h.distortionBuffer == nil || len(h.distortionBuffer) != totalSize {

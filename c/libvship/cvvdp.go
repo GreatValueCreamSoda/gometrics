@@ -143,7 +143,7 @@ func (h *CVVDPHandler) ResetScore() ExceptionCode {
 // This function is typically used to preload past context when evaluating a
 // clip extracted from a longer sequence.
 func (h *CVVDPHandler) LoadTemporal(src, dst [3][]byte, srcLineSize,
-	dstLineSize [3]int64) ExceptionCode {
+	dstLineSize [3]int) ExceptionCode {
 	s0 := planePtr(src[0])
 	s1 := planePtr(src[1])
 	s2 := planePtr(src[2])
@@ -179,8 +179,8 @@ func (h *CVVDPHandler) LoadTemporal(src, dst [3][]byte, srcLineSize,
 // Passing dst as nil disables distortion map generation and avoids
 // the associated overhead.
 func (h *CVVDPHandler) ComputeScore(
-	dst []byte, dstStride int64, src, distorted [3][]byte, srcLineSize,
-	dstLineSize [3]int64) (float64, ExceptionCode) {
+	dst []byte, dstStride int, src, distorted [3][]byte, srcLineSize,
+	dstLineSize [3]int) (float64, ExceptionCode) {
 	s0 := planePtr(src[0])
 	s1 := planePtr(src[1])
 	s2 := planePtr(src[2])

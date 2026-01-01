@@ -46,7 +46,7 @@ func Test_ButteraugliHandler_ComputeScore(t *testing.T) {
 		}
 	}
 
-	lineSizeSrc := [3]int64{int64(width), int64(width / 2), int64(width / 2)}
+	lineSizeSrc := [3]int{width, width / 2, width / 2}
 	lineSizeDst := lineSizeSrc
 
 	// Prepare score struct

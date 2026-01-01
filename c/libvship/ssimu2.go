@@ -56,7 +56,7 @@ func NewSSIMU2Handler(source, distortion *Colorspace) (*SSIMU2Handler,
 //
 // Returns the SSIM2 score and an ExceptionCode indicating success or failure.
 func (handler *SSIMU2Handler) ComputeScore(sourceData, distortedData [3][]byte,
-	sourceLineSize, distortedLineSize [3]int64) (float64, ExceptionCode) {
+	sourceLineSize, distortedLineSize [3]int) (float64, ExceptionCode) {
 
 	s0 := planePtr(sourceData[0])
 	s1 := planePtr(sourceData[1])

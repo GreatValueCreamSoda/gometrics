@@ -84,8 +84,8 @@ func NewButteraugliHandler(src, dst *Colorspace, Qnorm int,
 //
 // On success, score is populated with the computed quality metrics.
 func (handler *ButteraugliHandler) ComputeScore(
-	score *ButteraugliScore, dst []byte, dstStride int64, src1, src2 [3][]byte,
-	srcLineSize1, srcLineSize2 [3]int64) ExceptionCode {
+	score *ButteraugliScore, dst []byte, dstStride int, src1, src2 [3][]byte,
+	srcLineSize1, srcLineSize2 [3]int) ExceptionCode {
 
 	s0 := planePtr(src1[0])
 	s1 := planePtr(src1[1])

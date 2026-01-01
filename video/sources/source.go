@@ -94,9 +94,8 @@ func (s *ffmsSource) GetFrame(frame video.Frame) error {
 
 	tempFrame, err := video.NewFrame(
 		[3][]byte{ffmsFrame.Data[0], ffmsFrame.Data[1], ffmsFrame.Data[2]},
-		[3]int64{int64(ffmsFrame.Linesize[0]), int64(ffmsFrame.Linesize[1]),
-			int64(ffmsFrame.Linesize[2]),
-		})
+		[3]int{ffmsFrame.Linesize[0], ffmsFrame.Linesize[1],
+			ffmsFrame.Linesize[2]})
 	if err != nil {
 		return err
 	}
