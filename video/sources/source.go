@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"fmt"
 	"runtime"
 
 	pixfmts "github.com/GreatValueCreamSoda/gometrics/c/libavpixfmts"
@@ -85,16 +86,25 @@ func NewFFms2Reader(path string) (video.Source, error) {
 		planeStrides, float32(props.FPSNumerator) / float32(props.FPSDenominator)}, nil
 }
 
-func (s *ffmsSource) GetFrame(frame *video.Frame) error {
+func (s *ffmsSource) GetFrame(frame video.Frame) error {
 	ffmsFrame, _, err := s.video.GetFrame(s.currentIndex)
 	if err != nil {
 		return err
 	}
 
-	frame.Data = [3][]byte{
-		ffmsFrame.Data[0], ffmsFrame.Data[1], ffmsFrame.Data[2]}
-	frame.LineSize = [3]int64{int64(ffmsFrame.Linesize[0]), int64(ffmsFrame.Linesize[1]),
-		int64(ffmsFrame.Linesize[2])}
+	tempFrame, err := video.NewFrame(
+		[3][]byte{ffmsFrame.Data[0], ffmsFrame.Data[1], ffmsFrame.Data[2]},
+		[3]int64{int64(ffmsFrame.Linesize[0]), int64(ffmsFrame.Linesize[1]),
+			int64(ffmsFrame.Linesize[2]),
+		})
+	if err != nil {
+		return err
+	}
+
+	// This is the safe, protected operation
+	if err := frame.SafeCopyFrom(&tempFrame); err != nil {
+		return fmt.Errorf("failed to safely copy frame data: %w", err)
+	}
 
 	s.currentIndex++
 	return nil

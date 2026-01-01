@@ -91,12 +91,13 @@ func (h *Ssimu2Handler) Close() {
 // then returns the worker to the pool.
 //
 // The returned map contains a single entry keyed by Name().
-func (h *Ssimu2Handler) Compute(a, b *video.Frame) (map[string]float64,
+func (h *Ssimu2Handler) Compute(a, b video.Frame) (map[string]float64,
 	error) {
 	handler := h.pool.Get()
 	defer h.pool.Put(handler)
 
-	score, code := handler.ComputeScore(a.Data, b.Data, a.LineSize, b.LineSize)
+	score, code := handler.ComputeScore(a.Data(), b.Data(), a.LineSizes(),
+		b.LineSizes())
 
 	if !code.IsNone() {
 		return nil, fmt.Errorf("%s computation failed: %v", SSIMulacra2Name,

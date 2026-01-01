@@ -155,7 +155,7 @@ func (h *CVVDPHandler) getDistortionBufferAndSize() ([]byte, int64) {
 //
 // The method borrows a worker from the pool to computes the scaler score and
 // then returns the worker to the pool.
-func (h *CVVDPHandler) Compute(a, b *video.Frame) (map[string]float64,
+func (h *CVVDPHandler) Compute(a, b video.Frame) (map[string]float64,
 	error) {
 	handler := h.pool.Get()
 	defer h.pool.Put(handler)
@@ -188,8 +188,8 @@ func (h *CVVDPHandler) Compute(a, b *video.Frame) (map[string]float64,
 	}
 
 SKIP_TEMPORAL_RESET:
-	s, code = handler.ComputeScore(dstptr, dstStride, a.Data, b.Data, a.LineSize,
-		b.LineSize)
+	s, code = handler.ComputeScore(dstptr, dstStride, a.Data(), b.Data(),
+		a.LineSizes(), b.LineSizes())
 
 	if h.callback != nil {
 		if err := h.callback(h.distortionBuffer); err != nil {

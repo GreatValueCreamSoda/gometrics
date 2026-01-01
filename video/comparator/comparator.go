@@ -58,7 +58,7 @@ type metricResult struct {
 // with their indices for tracking.
 type framePair struct {
 	index int
-	a, b  *video.Frame
+	a, b  video.Frame
 }
 
 // Comparator orchestrates the concurrent comparison of two video sources using
@@ -81,7 +81,7 @@ type Comparator struct {
 	frameThreads int // Number of concurrent metric workers.
 	// A pool of reusable frames buffers that reader threads will pull from,
 	// copy the frame data to, and that metric threads will return.
-	framePoolA, framePoolB blockingpool.BlockingPool[*video.Frame]
+	framePoolA, framePoolB blockingpool.BlockingPool[video.Frame]
 	// The total number of frames that will be compared between video A and B.
 	numFrames int
 
@@ -90,7 +90,7 @@ type Comparator struct {
 	// videoAFrameChan and videoBFrameChan as the name implies are two channels
 	// frame reader thread A and B will write frames squentially to. These are
 	// then consumed by the frame pair goroutine.
-	videoAFrameChan, videoBFrameChan chan *video.Frame
+	videoAFrameChan, videoBFrameChan chan video.Frame
 
 	// fPairChan is the channel all metric threads will read from. Each
 	// framePair will contain one frame from video A and one frame from video B
@@ -148,8 +148,8 @@ func NewComparator(videoA, videoB video.Source, metrics []video.Metric, frameThr
 
 	totalBuffers := c.calculateTotalNumberOfFrameBuffers()
 
-	c.framePoolA = blockingpool.NewBlockingPool[*video.Frame](totalBuffers)
-	c.framePoolB = blockingpool.NewBlockingPool[*video.Frame](totalBuffers)
+	c.framePoolA = blockingpool.NewBlockingPool[video.Frame](totalBuffers)
+	c.framePoolB = blockingpool.NewBlockingPool[video.Frame](totalBuffers)
 
 	for range totalBuffers {
 		err := c.allocateFrameBuffer()
@@ -192,8 +192,8 @@ func (c *Comparator) validateArguments() error {
 // calculateTotalNumberOfFrameBuffers returns conservative estimate of needed
 // buffers accounting for pipeline stages and worker concurrency.
 func (c *Comparator) calculateTotalNumberOfFrameBuffers() int {
-	c.videoBFrameChan = make(chan *video.Frame, 1)
-	c.videoAFrameChan = make(chan *video.Frame, 1)
+	c.videoBFrameChan = make(chan video.Frame, 1)
+	c.videoAFrameChan = make(chan video.Frame, 1)
 	var totalFrameBuffers int = 1
 
 	c.fPairChan = make(chan framePair, c.frameThreads/2)
@@ -218,12 +218,15 @@ func (c *Comparator) allocateFrameBuffer() error {
 		return code.GetError()
 	}
 
-	fA := new(video.Frame)
-	fA.Data = [3][]byte{aData1, aData2, aData3}
-	fA.LineSize = [3]int64{int64(lA[0]), int64(lA[1]), int64(lA[2])}
+	fA, err := video.NewFrame([3][]byte{aData1, aData2, aData3},
+		[3]int64{int64(lA[0]), int64(lA[1]), int64(lA[2])})
+	if err != nil {
+		return err
+	}
+
 	c.framePoolA.Put(fA)
 
-	sB, lB := c.videoA.GetPlaneSizes()
+	sB, lB := c.videoB.GetPlaneSizes()
 	bData1, code := vship.PinnedMalloc(sB[0])
 	if !code.IsNone() {
 		return code.GetError()
@@ -237,9 +240,11 @@ func (c *Comparator) allocateFrameBuffer() error {
 		return code.GetError()
 	}
 
-	fB := new(video.Frame)
-	fB.Data = [3][]byte{bData1, bData2, bData3}
-	fB.LineSize = [3]int64{int64(lB[0]), int64(lB[1]), int64(lB[2])}
+	fB, err := video.NewFrame([3][]byte{bData1, bData2, bData3},
+		[3]int64{int64(lB[0]), int64(lB[1]), int64(lB[2])})
+	if err != nil {
+		return err
+	}
 	c.framePoolB.Put(fB)
 
 	return nil
@@ -305,10 +310,10 @@ func (c *Comparator) spawnReaderThreads() error {
 // readerThread reads from the supplied video source and sends them to the
 // frameChan till the total number of frames is read or the context is canceled
 func (c *Comparator) readerThread(ctx context.Context, source video.Source,
-	frameChan chan *video.Frame, framePool blockingpool.BlockingPool[*video.Frame]) error {
+	frameChan chan video.Frame, framePool blockingpool.BlockingPool[video.Frame]) error {
 
 	for i := 0; i < c.numFrames; i++ {
-		var frame *video.Frame
+		var frame video.Frame
 
 		select {
 		case <-ctx.Done():
@@ -343,24 +348,18 @@ func (c *Comparator) readerThread(ctx context.Context, source video.Source,
 // If any error occures exectuion is terminated early and the error is returned
 func (c *Comparator) spawnFramePairThreads() error {
 	for i := range make([]struct{}, c.numFrames) {
-		var a, b *video.Frame
+		var a, b video.Frame
 
 		select {
 		case <-c.ctx.Done():
 			return c.ctx.Err()
 		case a = <-c.videoAFrameChan:
-			if a == nil {
-				return nil
-			}
 		}
 
 		select {
 		case <-c.ctx.Done():
 			return c.ctx.Err()
 		case b = <-c.videoBFrameChan:
-			if b == nil {
-				return nil
-			}
 		}
 
 		select {
